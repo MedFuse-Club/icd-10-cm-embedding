@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICD-10-CM Code Search Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+
+        .kbd-hint {
+            display: inline-block;
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-left: 0.5rem;
+            font-family: monospace;
+        }
+
+        .search-box {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            font-size: 1.1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #searchInput:focus {
+            border-color: #6366f1;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .stats strong {
+            color: #1e293b;
+        }
+
+        .trie-visualization {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .tree-info {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tree-info strong {
+            color: #1e293b;
+            font-size: 1.1rem;
+        }
+
+        .tree-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 400px;
+        }
+
+        .tree-level {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+
+        .tree-node {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .node-circle {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: #e0e7ff;
+            border: 3px solid #6366f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #4338ca;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .node-circle.root {
+            background: #6366f1;
+            color: white;
+            width: 60px;
+            height: 60px;
+            font-size: 0.8rem;
+        }
+
+        .node-circle.highlighted {
+            background: #fbbf24;
+            border-color: #f59e0b;
+            transform: scale(1.2);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+        }
+
+        .node-circle.end-word {
+            background: #34d399;
+            border-color: #10b981;
+        }
+
+        .node-circle.dimmed {
+            opacity: 0.2;
+            filter: grayscale(0.8);
+        }
+
+        .node-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            margin-top: 0.3rem;
+            text-align: center;
+            max-width: 100px;
+        }
+
+        .node-count {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            background: #f1f5f9;
+            padding: 0.1rem 0.4rem;
+            border-radius: 10px;
+            margin-top: 0.2rem;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background: #cbd5e1;
+            top: 22px;
+            transition: all 0.3s;
+        }
+
+        .connection-line.highlighted {
+            background: #fbbf24;
+            height: 3px;
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+        }
+
+        .connection-line.dimmed {
+            opacity: 0.2;
+        }
+
+        .trie-legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .legend-circle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid;
+        }
+
+        .legend-circle.root {
+            background: #6366f1;
+            border-color: #6366f1;
+        }
+
+        .legend-circle.highlighted {
+            background: #fbbf24;
+            border-color: #f59e0b;
+        }
+
+        .legend-circle.end {
+            background: #34d399;
+            border-color: #10b981;
+        }
+
+        .legend-circle.normal {
+            background: #e0e7ff;
+            border-color: #6366f1;
+        }
+
+        .results {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin-top: 1.5rem;
+        }
+
+        .result-item {
+            padding: 1.25rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: start;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .result-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .code-badge {
+            background-color: #6366f1;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .description {
+            color: #334155;
+            line-height: 1.6;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ICD-10-CM Code Search</h1>
+            <p>Visual Trie Tree with Real-time Filtering <span class="kbd-hint">Press / to focus search</span></p>
+        </div>
+
+        <div class="search-box">
+            <div class="search-input-wrapper">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Type code (E11, I10) or keyword (diabetes, hypertension)..."
+                    autocomplete="off"
+                >
+            </div>
+            <div class="stats">
+                <span>Total codes in database: <strong id="totalCodes">0</strong></span>
+                <span id="searchStats">
+                    Showing <strong id="visibleNodes">0</strong> nodes | <strong id="matchingCodes">0</strong> matching codes
+                </span>
+            </div>
+        </div>
+
+        <div id="trieVisualization" class="trie-visualization">
+            <div class="tree-info">
+                <strong>Complete Trie Tree Structure</strong><br>
+                Type a <em>code</em> to highlight paths or a <em>keyword</em> to search descriptions
+            </div>
+            <div id="trieTree" class="tree-container"></div>
+            <div class="trie-legend">
+                <div class="legend-item">
+                    <div class="legend-circle root"></div>
+                    <span>Root Node</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle highlighted"></div>
+                    <span>Matching Path</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle end"></div>
+                    <span>Complete Code</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle normal"></div>
+                    <span>Branch Node</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="results hidden"></div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            function TrieNode() {
+                this.children = {};
+                this.isEndOfWord = false;
+                this.data = null;
+            }
+
+            function Trie() {
+                this.root = new TrieNode();
+                this.allCodes = [];
+            }
+
+            Trie.prototype.insert = function(code, description) {
+                var node = this.root;
+                var key = code.toLowerCase();
+                
+                for (var i = 0; i < key.length; i++) {
+                    var char = key[i];
+                    if (!node.children[char]) {
+                        node.children[char] = new TrieNode();
+                    }
+                    node = node.children[char];
+                }
+                
+                node.isEndOfWord = true;
+                node.data = { code: code, description: description };
+                this.allCodes.push({ code: code, description: description });
+            };
+
+            Trie.prototype.getMatchingPaths = function(prefix) {
+                var paths = [];
+                var node = this.root;
+                var key = prefix.toLowerCase();
+                var currentPath = '';
+                
+                for (var i = 0; i < key.length; i++) {
+                    var char = key[i];
+                    if (!node.children[char]) {
+                        break;
+                    }
+                    currentPath += char;
+                    paths.push(currentPath);
+                    node = node.children[char];
+                }
+                
+                return paths;
+            };
+
+            Trie.prototype.getAllAtPath = function(prefix) {
+                var results = [];
+                var node = this.root;
+                var key = prefix.toLowerCase();
+                
+                for (var i = 0; i < key.length; i++) {
+                    var char = key[i];
+                    if (!node.children[char]) {
+                        return results;
+                    }
+                    node = node.children[char];
+                }
+                
+                this.collectAllWords(node, results);
+                return results;
+            };
+
+            Trie.prototype.collectAllWords = function(node, results) {
+                if (node.isEndOfWord && node.data) {
+                    results.push(node.data);
+                }
+                
+                for (var char in node.children) {
+                    this.collectAllWords(node.children[char], results);
+                }
+                
+                return results;
+            };
+
+            var icd10Codes = [
+                { code: "A00.0", description: "Cholera due to Vibrio cholerae 01, biovar cholerae" },
+                { code: "A00.1", description: "Cholera due to Vibrio cholerae 01, biovar eltor" },
+                { code: "A00.9", description: "Cholera, unspecified" },
+                { code: "E11.9", description: "Type 2 diabetes mellitus without complications" },
+                { code: "E11.65", description: "Type 2 diabetes mellitus with hyperglycemia" },
+                { code: "E11.21", description: "Type 2 diabetes mellitus with diabetic nephropathy" },
+                { code: "E11.22", description: "Type 2 diabetes mellitus with diabetic chronic kidney disease" },
+                { code: "I10", description: "Essential (primary) hypertension" },
+                { code: "I11.0", description: "Hypertensive heart disease with heart failure" },
+                { code: "I11.9", description: "Hypertensive heart disease without heart failure" },
+                { code: "J44.0", description: "Chronic obstructive pulmonary disease with acute lower respiratory infection" },
+                { code: "J44.1", description: "Chronic obstructive pulmonary disease with (acute) exacerbation" },
+                { code: "J44.9", description: "Chronic obstructive pulmonary disease, unspecified" },
+                { code: "M79.3", description: "Panniculitis, unspecified" },
+                { code: "M79.7", description: "Fibromyalgia" },
+                { code: "N18.1", description: "Chronic kidney disease, stage 1" },
+                { code: "N18.2", description: "Chronic kidney disease, stage 2 (mild)" },
+                { code: "N18.3", description: "Chronic kidney disease, stage 3 (moderate)" },
+                { code: "N18.4", description: "Chronic kidney disease, stage 4 (severe)" },
+                { code: "N18.5", description: "Chronic kidney disease, stage 5" },
+                { code: "R50.9", description: "Fever, unspecified" },
+                { code: "R51", description: "Headache" },
+                { code: "R53.83", description: "Other fatigue" },
+                { code: "Z23", description: "Encounter for immunization" },
+                { code: "Z00.00", description: "Encounter for general adult medical examination without abnormal findings" },
+                { code: "Z79.4", description: "Long term (current) use of insulin" },
+                { code: "F41.1", description: "Generalized anxiety disorder" },
+                { code: "F32.9", description: "Major depressive disorder, single episode, unspecified" },
+                { code: "F33.0", description: "Major depressive disorder, recurrent, mild" },
+                { code: "G89.29", description: "Other chronic pain" },
+                { code: "K21.9", description: "Gastro-esophageal reflux disease without esophagitis" }
+            ];
+
+            var trie = new Trie();
+            $.each(icd10Codes, function(index, item) {
+                trie.insert(item.code, item.description);
+            });
+
+            $('#totalCodes').text(icd10Codes.length);
+
+            function buildCompleteTree() {
+                var $tree = $('#trieTree');
+                $tree.empty();
+                
+                var rootLevel = $('<div></div>').addClass('tree-level');
+                var rootNode = $('<div></div>')
+                    .addClass('tree-node')
+                    .attr('data-path', '')
+                    .append(
+                        $('<div></div>')
+                            .addClass('node-circle root')
+                            .text('ROOT')
+                    )
+                    .append(
+                        $('<div></div>')
+                            .addClass('node-count')
+                            .text(icd10Codes.length + ' codes')
+                    );
+                rootLevel.append(rootNode);
+                $tree.append(rootLevel);
+                
+                var firstLevelChars = {};
+                $.each(icd10Codes, function(i, item) {
+                    var firstChar = item.code.charAt(0).toLowerCase();
+                    if (!firstLevelChars[firstChar]) {
+                        firstLevelChars[firstChar] = [];
+                    }
+                    firstLevelChars[firstChar].push(item);
+                });
+                
+                var level1 = $('<div></div>').addClass('tree-level');
+                $.each(firstLevelChars, function(char, codes) {
+                    var node = $('<div></div>')
+                        .addClass('tree-node')
+                        .attr('data-path', char)
+                        .append(
+                            $('<div></div>')
+                                .addClass('node-circle')
+                                .text(char.toUpperCase())
+                        )
+                        .append(
+                            $('<div></div>')
+                                .addClass('node-count')
+                                .text(codes.length + ' codes')
+                        );
+                    level1.append(node);
+                });
+                $tree.append(level1);
+                
+                var secondLevelChars = {};
+                $.each(icd10Codes, function(i, item) {
+                    var prefix = item.code.substring(0, 2).toLowerCase();
+                    if (!secondLevelChars[prefix]) {
+                        secondLevelChars[prefix] = [];
+                    }
+                    secondLevelChars[prefix].push(item);
+                });
+                
+                var level2 = $('<div></div>').addClass('tree-level');
+                $.each(secondLevelChars, function(prefix, codes) {
+                    var char = prefix.charAt(1);
+                    var node = $('<div></div>')
+                        .addClass('tree-node')
+                        .attr('data-path', prefix)
+                        .append(
+                            $('<div></div>')
+                                .addClass('node-circle')
+                                .text(char.toUpperCase())
+                        )
+                        .append(
+                            $('<div></div>')
+                                .addClass('node-label')
+                                .text('after ' + prefix.charAt(0).toUpperCase())
+                        )
+                        .append(
+                            $('<div></div>')
+                                .addClass('node-count')
+                                .text(codes.length)
+                        );
+                    level2.append(node);
+                });
+                $tree.append(level2);
+                
+                var thirdLevelChars = {};
+                $.each(icd10Codes, function(i, item) {
+                    var prefix = item.code.substring(0, 3).toLowerCase();
+                    if (!thirdLevelChars[prefix]) {
+                        thirdLevelChars[prefix] = [];
+                    }
+                    thirdLevelChars[prefix].push(item);
+                });
+                
+                var level3 = $('<div></div>').addClass('tree-level');
+                $.each(thirdLevelChars, function(prefix, codes) {
+                    if (prefix.length >= 3) {
+                        var char = prefix.charAt(2);
+                        var hasEndWord = false;
+                        $.each(codes, function(i, code) {
+                            if (code.code.toLowerCase().indexOf(prefix) === 0) {
+                                hasEndWord = true;
+                            }
+                        });
+                        
+                        var node = $('<div></div>')
+                            .addClass('tree-node')
+                            .attr('data-path', prefix)
+                            .append(
+                                $('<div></div>')
+                                    .addClass('node-circle' + (hasEndWord ? ' end-word' : ''))
+                                    .text(char.toUpperCase())
+                            )
+                            .append(
+                                $('<div></div>')
+                                    .addClass('node-label')
+                                    .text(prefix.toUpperCase())
+                            );
+                        level3.append(node);
+                    }
+                });
+                $tree.append(level3);
+            }
+
+            function filterTree(searchValue) {
+                var lowerSearch = searchValue.toLowerCase();
+                
+                if (lowerSearch === '') {
+                    $('.tree-node').removeClass('dimmed');
+                    $('.node-circle').removeClass('highlighted dimmed');
+                    $('#resultsContainer').addClass('hidden');
+                    
+                    var totalNodes = $('.tree-node').length;
+                    $('#visibleNodes').text(totalNodes);
+                    $('#matchingCodes').text(icd10Codes.length);
+                    return;
+                }
+                
+                $('.tree-node').addClass('dimmed');
+                $('.node-circle').removeClass('highlighted').addClass('dimmed');
+                
+                $('[data-path=""]').removeClass('dimmed').find('.node-circle').removeClass('dimmed').addClass('highlighted');
+                
+                $('.tree-node').each(function() {
+                    var path = $(this).attr('data-path');
+                    if (path && path.indexOf(lowerSearch) === 0) {
+                        $(this).removeClass('dimmed');
+                        $(this).find('.node-circle').removeClass('dimmed').addClass('highlighted');
+                        
+                        for (var i = 0; i < path.length; i++) {
+                            var parentPath = path.substring(0, i + 1);
+                            $('[data-path="' + parentPath + '"]').removeClass('dimmed')
+                                .find('.node-circle').removeClass('dimmed').addClass('highlighted');
+                        }
+                    } else if (lowerSearch.indexOf(path) === 0 && path !== '') {
+                        $(this).removeClass('dimmed');
+                        $(this).find('.node-circle').removeClass('dimmed').addClass('highlighted');
+                    }
+                });
+                
+                var visibleCount = $('.tree-node:not(.dimmed)').length;
+                $('#visibleNodes').text(visibleCount);
+                
+                var matches = trie.getAllAtPath(lowerSearch);
+                $('#matchingCodes').text(matches.length);
+                
+                if (matches.length > 0) {
+                    var $container = $('<div></div>');
+                    $.each(matches, function(index, item) {
+                        var $resultItem = $('<div></div>')
+                            .addClass('result-item')
+                            .append(
+                                $('<span></span>')
+                                    .addClass('code-badge')
+                                    .text(item.code)
+                            )
+                            .append(
+                                $('<p></p>')
+                                    .addClass('description')
+                                    .text(item.description)
+                            );
+                        $container.append($resultItem);
+                    });
+                    $('#resultsContainer').html($container).removeClass('hidden');
+                } else {
+                    $('#resultsContainer').addClass('hidden');
+                }
+            }
+
+            buildCompleteTree();
+            var totalNodes = $('.tree-node').length;
+            $('#visibleNodes').text(totalNodes);
+            $('#matchingCodes').text(icd10Codes.length);
+
+            $('#searchInput').on('input', function() {
+                var $this = $(this);
+                $this.data('timeout', clearTimeout($this.data('timeout')));
+                $this.data('timeout', setTimeout(function() {
+                    filterTree($this.val());
+                }, 100));
+            });
+
+            $(window).on('keydown', function(e) {
+                if (e.key === '/' && !$('#searchInput').is(':focus')) {
+                    e.preventDefault();
+                    $('#searchInput').focus();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
