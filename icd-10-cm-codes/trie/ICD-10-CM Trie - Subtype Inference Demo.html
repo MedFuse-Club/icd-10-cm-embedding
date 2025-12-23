@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICD-10-CM Trie - Subtype Inference Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .description-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .description-box p {
+            margin: 5px 0;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .type-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .type-label {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .type-value {
+            color: #d63384;
+        }
+
+        .suggestions {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .suggestion-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .suggestion-item:hover {
+            background: #e7f3ff;
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .code {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .description {
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge-billable {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-non-billable {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .search-result {
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .result-success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+
+        .result-error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+
+        .result-info {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .inference-flow {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin-top: 15px;
+        }
+
+        .flow-step {
+            margin-bottom: 10px;
+            padding-left: 15px;
+            position: relative;
+        }
+
+        .flow-step::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #ffc107;
+            font-weight: bold;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 ICD-10-CM Trie Subtype Inference</h1>
+            <p class="subtitle">
+                An interactive demonstration of TypeScript's advanced type system modeling the ICD-10-CM medical coding hierarchy. 
+                This tool shows how template literal types, discriminated unions, and generics work together to create type-safe 
+                medical code validation at compile time.
+            </p>
+            <div class="description-box">
+                <p><strong>What is ICD-10-CM?</strong> The International Classification of Diseases, 10th Revision, Clinical Modification 
+                is a system used by physicians and healthcare providers to classify and code all diagnoses, symptoms, and procedures 
+                recorded in conjunction with hospital care in the United States.</p>
+                <p><strong>Why TypeScript?</strong> By using TypeScript's template literal types, we can enforce code validity at compile time, 
+                preventing invalid codes from ever reaching production. This demonstration uses a Trie data structure for efficient 
+                prefix matching and autocomplete functionality.</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>💻 Input & Type Analysis</h2>
+                <p style="color: #666; margin-bottom: 15px; line-height: 1.6;">
+                    Enter an ICD-10-CM code to see real-time type inference. The system analyzes each character as you type, 
+                    showing how TypeScript's type system narrows from generic <code>string</code> to specific literal types. 
+                    Watch the type flow from basic JavaScript runtime types to compile-time template literal validation.
+                </p>
+                
+                <div class="input-group">
+                    <label for="codeInput">
+                        Type an ICD-10-CM Code:
+                        <span style="font-weight: normal; color: #666; font-size: 0.9em;">
+                            (Format: Letter + 2 digits, optionally followed by decimal and subcategory)
+                        </span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="codeInput" 
+                        placeholder="E.g., E11 (diabetes), I10 (hypertension), J44 (COPD)..."
+                        autocomplete="off"
+                    >
+                    <p style="margin-top: 8px; color: #666; font-size: 0.9em;">
+                        💡 Try: <strong>E11</strong> for Type 2 Diabetes, <strong>I10</strong> for Hypertension, 
+                        or <strong>E11.9</strong> for a complete CM code with clinical modifier
+                    </p>
+                </div>
+
+                <div id="typeInference"></div>
+                <div id="searchResult"></div>
+            </div>
+
+            <div class="panel">
+                <h2>✨ Autocomplete Suggestions</h2>
+                <p style="color: #666; margin-bottom: 15px; line-height: 1.6;">
+                    The Trie data structure enables efficient prefix-based searching, providing instant autocomplete suggestions 
+                    as you type. Each suggestion shows the complete code, its medical description, billable status (important for 
+                    insurance claims), and disease category. This demonstrates how type-safe data structures can power real-world 
+                    healthcare applications.
+                </p>
+                <div id="suggestions" class="suggestions"></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>📊 Trie Statistics</h2>
+            <p style="color: #666; margin-bottom: 15px; line-height: 1.6;">
+                This Trie contains a sample dataset of ICD-10-CM codes across multiple disease categories. 
+                The statistics below show the distribution of codes in the tree structure. "Billable" codes are 
+                specific enough for insurance reimbursement, while non-billable codes are category headers that 
+                require more specific subcategories.
+            </p>
+            <div class="stats" id="stats"></div>
+            <div class="description-box" style="margin-top: 15px;">
+                <p><strong>About the Trie Structure:</strong> A Trie (prefix tree) is ideal for ICD-10-CM codes because 
+                it stores codes hierarchically by their prefixes. This enables O(m) lookup time where m is the code length, 
+                and efficient prefix-based autocomplete. Each node represents a character, and paths from root to leaf nodes 
+                form complete codes.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // TRIE IMPLEMENTATION
+        // ============================================================================
+
+        class TrieNode {
+            constructor() {
+                this.children = new Map();
+                this.isEndOfCode = false;
+                this.data = null;
+            }
+        }
+
+        class Trie {
+            constructor() {
+                this.root = new TrieNode();
+            }
+
+            insert(code, metadata) {
+                let node = this.root;
+                
+                for (const char of code) {
+                    if (!node.children.has(char)) {
+                        node.children.set(char, new TrieNode());
+                    }
+                    node = node.children.get(char);
+                }
+                
+                node.isEndOfCode = true;
+                node.data = metadata;
+            }
+
+            search(code) {
+                const node = this.traverse(code);
+                
+                if (!node) {
+                    return { success: false, error: `Code "${code}" not found`, type: 'not_found' };
+                }
+                
+                if (!node.isEndOfCode || !node.data) {
+                    return { success: false, error: `"${code}" is a prefix but not a complete code`, type: 'prefix_only' };
+                }
+                
+                return { success: true, data: node.data };
+            }
+
+            has(code) {
+                const result = this.search(code);
+                return result.success;
+            }
+
+            getCodesWithPrefix(prefix) {
+                const node = this.traverse(prefix);
+                
+                if (!node) {
+                    return [];
+                }
+                
+                const results = [];
+                this.collectCodes(node, prefix, results);
+                return results;
+            }
+
+            autocomplete(partial, limit = 10) {
+                return this.getCodesWithPrefix(partial).slice(0, limit);
+            }
+
+            traverse(code) {
+                let node = this.root;
+                
+                for (const char of code) {
+                    const next = node.children.get(char);
+                    if (!next) return null;
+                    node = next;
+                }
+                
+                return node;
+            }
+
+            collectCodes(node, prefix, results) {
+                if (node.isEndOfCode && node.data) {
+                    results.push({
+                        code: prefix,
+                        description: node.data.description,
+                        billable: node.data.billable,
+                        category: node.data.category
+                    });
+                }
+                
+                for (const [char, child] of node.children) {
+                    this.collectCodes(child, prefix + char, results);
+                }
+            }
+
+            getAllCodes() {
+                return this.getCodesWithPrefix('');
+            }
+
+            getStats() {
+                const allCodes = this.getAllCodes();
+                const categories = new Set();
+                let billableCount = 0;
+
+                allCodes.forEach(code => {
+                    if (code.billable) billableCount++;
+                    if (code.category) categories.add(code.category);
+                });
+
+                return {
+                    totalCodes: allCodes.length,
+                    billableCodes: billableCount,
+                    categories: Array.from(categories)
+                };
+            }
+        }
+
+        // ============================================================================
+        // SAMPLE DATA
+        // ============================================================================
+
+        const sampleCodes = [
+            { code: 'E11', description: 'Type 2 diabetes mellitus', billable: false, category: 'Endocrine' },
+            { code: 'E11.9', description: 'Type 2 diabetes mellitus without complications', billable: true, category: 'Endocrine' },
+            { code: 'E11.65', description: 'Type 2 diabetes mellitus with hyperglycemia', billable: true, category: 'Endocrine' },
+            { code: 'E11.21', description: 'Type 2 diabetes mellitus with diabetic nephropathy', billable: true, category: 'Endocrine' },
+            { code: 'E11.22', description: 'Type 2 diabetes mellitus with diabetic chronic kidney disease', billable: true, category: 'Endocrine' },
+            { code: 'I10', description: 'Essential (primary) hypertension', billable: true, category: 'Circulatory' },
+            { code: 'I11', description: 'Hypertensive heart disease', billable: false, category: 'Circulatory' },
+            { code: 'I11.0', description: 'Hypertensive heart disease with heart failure', billable: true, category: 'Circulatory' },
+            { code: 'I11.9', description: 'Hypertensive heart disease without heart failure', billable: true, category: 'Circulatory' },
+            { code: 'J44', description: 'Chronic obstructive pulmonary disease', billable: false, category: 'Respiratory' },
+            { code: 'J44.0', description: 'COPD with acute lower respiratory infection', billable: true, category: 'Respiratory' },
+            { code: 'J44.1', description: 'COPD with acute exacerbation', billable: true, category: 'Respiratory' },
+            { code: 'J44.9', description: 'COPD, unspecified', billable: true, category: 'Respiratory' },
+            { code: 'M79.3', description: 'Panniculitis, unspecified', billable: true, category: 'Musculoskeletal' },
+            { code: 'Z23', description: 'Encounter for immunization', billable: true, category: 'Health Status' },
+        ];
+
+        // Initialize trie
+        const trie = new Trie();
+        sampleCodes.forEach(({ code, description, billable, category }) => {
+            trie.insert(code, { description, billable, category });
+        });
+
+        // ============================================================================
+        // UI FUNCTIONS
+        // ============================================================================
+
+        function showTypeInference(input) {
+            const inferenceDiv = document.getElementById('typeInference');
+            
+            if (!input) {
+                inferenceDiv.innerHTML = `
+                    <div class="type-info" style="background: #e8f4f8; border-left-color: #17a2b8;">
+                        <div class="type-label">💡 About ICD-10-CM Type Inference</div>
+                        <p style="margin-top: 8px; color: #555; line-height: 1.6;">
+                            ICD-10-CM (Clinical Modification) codes are hierarchical medical codes used for diagnosis reporting. 
+                            TypeScript's type system can model these codes using <strong>template literal types</strong> to ensure type safety 
+                            at compile time. Start typing to see how TypeScript infers and validates code patterns!
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const isValid = /^[A-Z]\d{0,2}(\.\d*)?$/.test(input);
+            const matchesPattern = /^[A-Z]\d{2}(\..+)?$/.test(input);
+            
+            // CM (Clinical Modification) type analysis
+            const hasCMExtension = input.includes('.');
+            const isCMComplete = /^[A-Z]\d{2}\.\d+$/.test(input);
+            
+            // Character breakdown
+            const firstChar = input[0];
+            const secondChar = input[1];
+            const thirdChar = input[2];
+            
+            let html = '<div class="inference-flow">';
+            html += '<div class="type-label">🔍 Real-Time Type Inference Analysis</div>';
+            html += '<p style="margin: 8px 0; color: #666; font-size: 0.9em;">Watch how TypeScript analyzes and validates your input character by character</p>';
+            
+            // Basic type information
+            html += `<div class="flow-step">Raw Input Value: <span class="type-value">"${input}"</span> (user entered string)</div>`;
+            html += `<div class="flow-step">Runtime Type: <span class="type-value">string</span> - JavaScript primitive type</div>`;
+            html += `<div class="flow-step">Compile-time Literal Type: <span class="type-value">"${input}"</span> - TypeScript narrows to exact string literal</div>`;
+            html += `<div class="flow-step">Character Count: <span class="type-value">${input.length} character${input.length !== 1 ? 's' : ''}</span> - used for pattern validation</div>`;
+            
+            // Character-by-character analysis
+            html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 2px solid #ddd;">';
+            html += '<div class="type-label">🔤 Character-by-Character Breakdown:</div>';
+            if (firstChar) {
+                const isLetter = /[A-Z]/.test(firstChar);
+                html += `<div class="flow-step">Position [0]: <span class="type-value">'${firstChar}'</span> - ${isLetter ? '✓ Valid letter (disease category)' : '✗ Must be A-Z'}</div>`;
+            }
+            if (secondChar) {
+                const isDigit = /\d/.test(secondChar);
+                html += `<div class="flow-step">Position [1]: <span class="type-value">'${secondChar}'</span> - ${isDigit ? '✓ Valid digit (category refinement)' : '✗ Must be 0-9'}</div>`;
+            }
+            if (thirdChar) {
+                const isDigit = /\d/.test(thirdChar);
+                html += `<div class="flow-step">Position [2]: <span class="type-value">'${thirdChar}'</span> - ${isDigit ? '✓ Valid digit (completes base category)' : thirdChar === '.' ? '✓ Decimal point (starts CM extension)' : '✗ Expected digit or .'}</div>`;
+            }
+            html += '</div>';
+            
+            // ICD-10 structure analysis
+            html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 2px solid #ddd;">';
+            html += '<div class="type-label">📋 ICD-10 Structure Validation:</div>';
+            html += `<div class="flow-step">Basic Format Check: <span class="type-value">${isValid ? '✓ Passes - follows ICD-10 character rules' : '✗ Fails - contains invalid characters'}</span></div>`;
+            html += `<div class="flow-step">Complete Pattern Match: <span class="type-value">${matchesPattern ? '✓ Complete - ready for lookup' : '✗ Incomplete - need more characters'}</span></div>`;
+            
+            // Explain the pattern
+            if (input.length > 0 && input.length < 3) {
+                html += `<div class="flow-step" style="color: #ff8800;">⚠️ Incomplete: Need ${3 - input.length} more character${3 - input.length !== 1 ? 's' : ''} for valid base code</div>`;
+            }
+            html += '</div>';
+            
+            // CM (Clinical Modification) analysis
+            html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 2px solid #ddd;">';
+            html += '<div class="type-label">🏥 CM (Clinical Modification) Analysis:</div>';
+            html += '<p style="margin: 5px 0 8px 0; color: #666; font-size: 0.85em;">The .decimal extension provides specific clinical details for billing and diagnosis precision</p>';
+            html += `<div class="flow-step">Has CM Extension: <span class="type-value">${hasCMExtension ? '✓ Yes - includes clinical modifier after decimal' : '✗ No - base category code only'}</span></div>`;
+            
+            if (input.includes('.')) {
+                const [category, subcategory] = input.split('.');
+                html += `<div class="flow-step">Base Category Code: <span class="type-value">"${category}"</span> - broad disease classification</div>`;
+                html += `<div class="flow-step">  └─ TypeScript Type: <span class="type-value">type Category = "${category}"</span></div>`;
+                html += `<div class="flow-step">CM Subcategory Code: <span class="type-value">"${subcategory || '(empty - still typing)'}"</span> - specific clinical variant</div>`;
+                html += `<div class="flow-step">  └─ TypeScript Type: <span class="type-value">type Subcategory = "${subcategory || 'string'}"</span></div>`;
+                html += `<div class="flow-step">Complete CM Code: <span class="type-value">${isCMComplete ? '✓ Valid - ready for billing' : '✗ Incomplete - need subcategory digits'}</span></div>`;
+                html += `<div class="flow-step">Template Literal Type: <span class="type-value">\`\${${category}}.\${${subcategory || 'string'}}\`</span></div>`;
+                
+                if (!subcategory) {
+                    html += `<div class="flow-step" style="color: #ff8800;">⚠️ Waiting for subcategory digits after decimal point</div>`;
+                }
+            } else {
+                html += `<div class="flow-step">Code Classification: <span class="type-value">Base category only (no clinical modifier)</span></div>`;
+                if (input.length === 3) {
+                    html += `<div class="flow-step">Can Add CM Extension: <span class="type-value">✓ Type a '.' to add clinical details</span></div>`;
+                    html += `<div class="flow-step">Template Literal Union: <span class="type-value">\`${input}\` | \`${input}.$\{string}\`</span></div>`;
+                    html += '<p style="margin: 5px 0 0 0; color: #666; font-size: 0.85em;">This creates a union type: either the base code OR the base + any CM extension</p>';
+                }
+            }
+            html += '</div>';
+            
+            // Type union representation
+            html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 2px solid #ddd;">';
+            html += '<div class="type-label">⚡ TypeScript Type System Representation:</div>';
+            if (matchesPattern) {
+                if (hasCMExtension) {
+                    html += `<div class="flow-step">Inferred Type: <span class="type-value">ICD10_CM&lt;"${input}"&gt;</span></div>`;
+                    html += '<p style="margin: 5px 0 0 0; color: #666; font-size: 0.85em;">Generic type parameter captures exact code as literal type for maximum type safety</p>';
+                } else {
+                    html += `<div class="flow-step">Inferred Type: <span class="type-value">ICD10_Base&lt;"${input}"&gt;</span></div>`;
+                    html += '<p style="margin: 5px 0 0 0; color: #666; font-size: 0.85em;">Base category type - can be extended with CM subcategories</p>';
+                }
+                
+                // Show the discriminated union
+                html += '<div style="margin-top: 10px; background: #f0f0f0; padding: 10px; border-radius: 5px; font-family: Courier New;">';
+                html += '<div style="font-size: 0.85em; color: #666;">TypeScript would see this as:</div>';
+                html += `<div style="margin-top: 5px;"><span style="color: #0066cc;">type</span> MyCode = <span style="color: #d63384;">"${input}"</span>;</div>`;
+                if (hasCMExtension) {
+                    html += `<div><span style="color: #0066cc;">interface</span> Result {</div>`;
+                    html += `<div>  success: <span style="color: #0066cc;">true</span>;</div>`;
+                    html += `<div>  data: CodeMetadata;</div>`;
+                    html += `<div>}</div>`;
+                }
+                html += '</div>';
+            } else {
+                html += `<div class="flow-step">Current Type: <span class="type-value">string</span> (incomplete, type narrowing pending)</div>`;
+                html += '<p style="margin: 5px 0 0 0; color: #666; font-size: 0.85em;">TypeScript keeps this as generic string until pattern is complete and validated</p>';
+            }
+            html += '</div>';
+            
+            // Pattern matching explanation
+            html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 2px solid #ddd;">';
+            html += '<div class="type-label">🎯 Template Literal Pattern Matching:</div>';
+            html += '<div style="background: #f0f0f0; padding: 10px; border-radius: 5px; font-family: Courier New; font-size: 0.85em; margin-top: 8px;">';
+            html += '<div style="color: #666;">// TypeScript template literal type definition:</div>';
+            html += '<div><span style="color: #0066cc;">type</span> Letter = <span style="color: #d63384;">\'A\'</span> | <span style="color: #d63384;">\'B\'</span> | <span style="color: #d63384;">\'C\'</span> | ... | <span style="color: #d63384;">\'Z\'</span>;</div>';
+            html += '<div><span style="color: #0066cc;">type</span> Digit = <span style="color: #d63384;">\'0\'</span> | <span style="color: #d63384;">\'1\'</span> | ... | <span style="color: #d63384;">\'9\'</span>;</div>';
+            html += '<div><span style="color: #0066cc;">type</span> ICD10_Pattern = </div>';
+            html += '<div>  | <span style="color: #d63384;">`${Letter}${Digit}${Digit}`</span></div>';
+            html += '<div>  | <span style="color: #d63384;">`${Letter}${Digit}${Digit}.${string}`</span>;</div>';
+            html += '</div>';
+            html += `<div class="flow-step" style="margin-top: 8px;">Your Input Matches: <span class="type-value">${matchesPattern ? (hasCMExtension ? 'Second pattern (with CM)' : 'First pattern (base only)') : 'None yet (incomplete)'}</span></div>`;
+            html += '</div>';
+            
+            html += '</div>';
+
+            inferenceDiv.innerHTML = html;
+        }
+
+        function showSearchResult(input) {
+            const resultDiv = document.getElementById('searchResult');
+            
+            if (!input) {
+                resultDiv.innerHTML = '';
+                return;
+            }
+
+            const result = trie.search(input);
+            
+            let html = '<div class="search-result ';
+            
+            if (result.success) {
+                html += 'result-success">';
+                html += '<div class="type-label">✅ Search Result: Code Found Successfully</div>';
+                html += '<p style="margin: 8px 0; color: #155724;">The Trie successfully located this code in O(m) time complexity, where m is the code length.</p>';
+                html += `<div style="margin-top: 10px;"><strong>ICD-10-CM Code:</strong> <span style="font-family: monospace; font-size: 1.1em;">${input}</span></div>`;
+                html += `<div style="margin-top: 8px;"><strong>Full Description:</strong> ${result.data.description}</div>`;
+                html += `<div style="margin-top: 8px;"><strong>Disease Category:</strong> ${result.data.category}</div>`;
+                html += `<div style="margin-top: 8px;"><strong>Billable Status:</strong> ${result.data.billable ? '✓ Yes - This code is sufficiently specific for insurance billing and claims processing' : '✗ No - This is a category header; a more specific subcategory code is required for billing'}</div>`;
+                html += '<div style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px; font-size: 0.9em;">';
+                html += '<strong>TypeScript Return Type:</strong><br>';
+                html += '<code style="color: #d63384;">{ success: true; data: CodeMetadata }</code>';
+                html += '</div>';
+            } else {
+                if (result.type === 'prefix_only') {
+                    html += 'result-info">';
+                    html += '<div class="type-label">ℹ️ Partial Match: Valid Prefix Detected</div>';
+                    html += `<div style="margin-top: 10px;">${result.error}</div>`;
+                    const suggestions = trie.getCodesWithPrefix(input);
+                    if (suggestions.length > 0) {
+                        html += `<div style="margin-top: 10px;"><strong>Available Complete Codes:</strong> ${suggestions.length} code${suggestions.length !== 1 ? 's' : ''} found with this prefix</div>`;
+                        html += '<p style="margin-top: 8px; color: #004085; font-size: 0.95em;">This is a valid category prefix but not a complete code. See autocomplete suggestions for valid complete codes under this category.</p>';
+                    }
+                    html += '<div style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px; font-size: 0.9em;">';
+                    html += '<strong>TypeScript Return Type:</strong><br>';
+                    html += '<code style="color: #d63384;">{ success: false; error: string; type: "prefix_only" }</code>';
+                    html += '</div>';
+                } else {
+                    html += 'result-error">';
+                    html += '<div class="type-label">❌ Search Failed: Code Not Found</div>';
+                    html += `<div style="margin-top: 10px;">${result.error}</div>`;
+                    html += '<p style="margin-top: 8px; color: #721c24; font-size: 0.95em;">This code does not exist in the current dataset. It may be an invalid code, a typo, or a code not included in our sample database. Check the format (Letter + 2 digits + optional decimal + digits) and try again.</p>';
+                    html += '<div style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px; font-size: 0.9em;">';
+                    html += '<strong>TypeScript Return Type:</strong><br>';
+                    html += '<code style="color: #d63384;">{ success: false; error: string; type: "not_found" }</code>';
+                    html += '</div>';
+                }
+            }
+            
+            html += '</div>';
+            resultDiv.innerHTML = html;
+        }
+
+        function showSuggestions(input) {
+            const suggestionsDiv = document.getElementById('suggestions');
+            
+            if (!input) {
+                suggestionsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <div style="font-size: 1.1em; margin-bottom: 8px;">Start Typing to See Suggestions</div>
+                        <p style="color: #666; max-width: 400px; margin: 0 auto; line-height: 1.5;">
+                            Enter an ICD-10-CM code prefix (like E11, I10, or J44) to see all matching codes in the Trie. 
+                            The autocomplete uses efficient prefix matching to find relevant codes instantly.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const suggestions = trie.autocomplete(input, 15);
+            
+            if (suggestions.length === 0) {
+                suggestionsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div style="font-size: 1.1em; margin-bottom: 8px;">No Suggestions Found</div>
+                        <p style="color: #666;">
+                            No ICD-10-CM codes in the database start with "<strong>${input}</strong>". 
+                            Try a different prefix or check the format (should start with a letter A-Z followed by digits).
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div style="margin-bottom: 12px; padding: 10px; background: #e8f4f8; border-radius: 5px;">';
+            html += `<strong>${suggestions.length} code${suggestions.length !== 1 ? 's' : ''} found</strong> matching the prefix "<strong>${input}</strong>". `;
+            html += 'Click any suggestion to populate the search field and see detailed type analysis.';
+            html += '</div>';
+            
+            suggestions.forEach(sug => {
+                html += `
+                    <div class="suggestion-item" onclick="selectCode('${sug.code}')">
+                        <div class="code">
+                            ${sug.code}
+                            <span class="badge ${sug.billable ? 'badge-billable' : 'badge-non-billable'}">
+                                ${sug.billable ? '✓ Billable' : '✗ Non-Billable'}
+                            </span>
+                        </div>
+                        <div class="description">${sug.description}</div>
+                        <div style="font-size: 0.85em; color: #999; margin-top: 5px;">
+                            <strong>Category:</strong> ${sug.category} • 
+                            ${sug.billable 
+                                ? 'Sufficiently specific for insurance billing and reimbursement' 
+                                : 'Category header - requires more specific subcategory for billing'}
+                        </div>
+                    </div>
+                `;
+            });
+
+            suggestionsDiv.innerHTML = html;
+        }
+
+        function showStats() {
+            const statsDiv = document.getElementById('stats');
+            const stats = trie.getStats();
+
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.totalCodes}</div>
+                    <div class="stat-label">Total Codes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.billableCodes}</div>
+                    <div class="stat-label">Billable Codes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.categories.length}</div>
+                    <div class="stat-label">Categories</div>
+                </div>
+            `;
+        }
+
+        function selectCode(code) {
+            const input = document.getElementById('codeInput');
+            input.value = code;
+            handleInput(code);
+        }
+
+        function handleInput(value) {
+            const upperValue = value.toUpperCase();
+            showTypeInference(upperValue);
+            showSearchResult(upperValue);
+            showSuggestions(upperValue);
+        }
+
+        // ============================================================================
+        // EVENT LISTENERS
+        // ============================================================================
+
+        document.getElementById('codeInput').addEventListener('input', (e) => {
+            handleInput(e.target.value);
+        });
+
+        // Initialize
+        showStats();
+        showSuggestions('');
+    </script>
+</body>
+</html>
